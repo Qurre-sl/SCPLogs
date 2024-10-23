@@ -108,15 +108,11 @@ class Sender implements IClient {
             return;
         }
 
-        try {
-            this.lastHandShake = 0;
-            this.client.user?.setPresence({
-                activities: [{name: translations.disconnected, type: ActivityType.Custom}],
-                status: 'dnd'
-            });
-        } catch {
-            // rate limit handler
-        }
+        this.lastHandShake = 0;
+        this.client.user?.setPresence({
+            activities: [{name: translations.disconnected, type: ActivityType.Custom}],
+            status: 'dnd'
+        });
     }
 }
 

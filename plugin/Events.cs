@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Newtonsoft.Json.Linq;
@@ -52,6 +53,21 @@ internal static class Events
         if (!translation.Enabled || string.IsNullOrEmpty(translation.LuaScript) || translation.Channels.Length == 0)
             return;
 
+        Dictionary<string, object> luaEnums = [];
+
+        foreach (PropertyInfo property in properties)
+        {
+            Type typeOfProperty = property.PropertyType;
+            
+            if (typeOfProperty is not { IsSealed: true, IsEnum: true })
+                continue;
+            
+            if (typeOfProperty.Namespace?.StartsWith("Qurre.API.Objects") ?? true)
+                continue;
+
+            luaEnums["Enum_" + typeOfProperty.Name] = UserData.CreateStatic(typeOfProperty);
+        }
+
         PropertyInfo? propertyAllowed = type.GetProperty("Allowed", BindingFlags.Public | BindingFlags.Instance);
         var sendLog = (string message, string[]? channels = null) => EventsExtensions.SendLog(message, channels ?? translation.Channels);
 
@@ -66,6 +82,9 @@ internal static class Events
             foreach (PropertyInfo property in properties)
                 luaScript.Globals[property.Name] = property.GetValue(@event);
 
+            foreach (var luaEnum in luaEnums)
+                luaScript.Globals[luaEnum.Key] = luaEnum.Value;
+
             luaScript.Globals["SendLog"] = sendLog;
             luaScript.Globals["PrintPlayer"] = (object)EventsExtensions.PrintPlayer;
 
@@ -76,6 +95,7 @@ internal static class Events
                 return;
 
             sendLog(reply.Type == DataType.String ? reply.String : reply.ToString());
+            Log.Debug(type.Name);
         });
 
     }

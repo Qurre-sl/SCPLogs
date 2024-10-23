@@ -3,8 +3,8 @@ import socketConfigs from "../src/configs/socket";
 
 jest.mock("../src/sender/main", () => {
     return {
-        async SendLog(message: string, channels: string[]) {
-            console.log('SendLog hooked. Message: ' + message + ', Channels: ' + channels);
+        async SendLog(message: string, channels: string) {
+            console.log('SendLog hooked. Message: ' + message + ', Channel: ' + channels);
         },
 
         async Reply(message: string, original: string) {
