@@ -9,4 +9,5 @@ public class Global
     public Protocol Protocol { get; set; } = Protocol.Udp;
     public string ClientToken { get; set; } = "GENERATE RANDOM";
     public string BadgeOnline { get; set; } = "reply = string.format(\"%s/%s players\", Count, Slots)";
+    public string[] SendUnAllowedEvents { get; set; } = ["RemoteAdminCommandEvent", "GameConsoleCommandEvent"];
 }

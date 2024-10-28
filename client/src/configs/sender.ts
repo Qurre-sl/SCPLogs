@@ -10,7 +10,7 @@ interface IConfigSender {
 const config : IConfigSender = {
     type: ClientType.Discord,
     auth: 'TOKEN HERE',
-    allowedChannels: [ ], // [ 'channelId' ]
+    allowedChannels: [ '123' ],
     timeoutSeconds: 60,
 }
 

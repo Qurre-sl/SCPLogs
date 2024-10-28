@@ -59,19 +59,27 @@ public class Client : ISender
         while (_alive)
         {
             await Task.Delay(2000);
-            
+
             if (_messages.Count == 0)
                 continue;
-            
-            FormUrlEncodedContent content = new(new Dictionary<string, string>
-            {
-                { "messages", JsonConvert.SerializeObject(_messages) }
-            });
-            
-            _messages.Clear();
 
-            await HandleRequest(_httpClient.PostAsync(_host.AbsoluteUri + "SendLog", content),
-                "sending logs");
+            try
+            {
+                FormUrlEncodedContent content = new(new Dictionary<string, string>
+                {
+                    { "messages", JsonConvert.SerializeObject(_messages) }
+                });
+
+                _messages.Clear();
+
+                await HandleRequest(_httpClient.PostAsync(_host.AbsoluteUri + "SendLog", content),
+                    "sending logs");
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex);
+            }
+
         }
     }
 

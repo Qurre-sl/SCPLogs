@@ -46,6 +46,7 @@ class Command {
         if (!interaction) return;
 
         interaction.editReply({ content: message }).catch(console.error);
+        this.cachedCommands.delete(original);
     }
 
     getData()  {

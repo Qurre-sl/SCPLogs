@@ -77,7 +77,7 @@ class Sender implements IClient {
                 cached = '';
             }
 
-            cached += part;
+            cached += part + '\n';
         }
 
         await channel.send({content: cached});

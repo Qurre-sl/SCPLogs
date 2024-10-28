@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using MEC;
 using Newtonsoft.Json.Linq;
 using Qurre.API;
 using Qurre.Events.Structs;
@@ -53,15 +54,17 @@ internal static class Events
         if (!translation.Enabled || string.IsNullOrEmpty(translation.LuaScript) || translation.Channels.Length == 0)
             return;
 
+        bool checkAllowed = !Main.GlobalConfig.SendUnAllowedEvents.Contains(type.Name);
+
         Dictionary<string, object> luaEnums = [];
 
         foreach (PropertyInfo property in properties)
         {
             Type typeOfProperty = property.PropertyType;
-            
+
             if (typeOfProperty is not { IsSealed: true, IsEnum: true })
                 continue;
-            
+
             if (typeOfProperty.Namespace?.StartsWith("Qurre.API.Objects") ?? true)
                 continue;
 
@@ -69,12 +72,17 @@ internal static class Events
         }
 
         PropertyInfo? propertyAllowed = type.GetProperty("Allowed", BindingFlags.Public | BindingFlags.Instance);
-        var sendLog = (string message, string[]? channels = null) => EventsExtensions.SendLog(message, channels ?? translation.Channels);
+        var sendLog = (string message, string[]? channels = null) =>
+            EventsExtensions.SendLog(message, channels ?? translation.Channels);
 
-        Core.InjectAction(eventId, int.MinValue, @event =>
+        Core.InjectAction(eventId, int.MinValue, @event => { Timing.RunCoroutine(CallEvent(@event)); });
+
+        return;
+
+        IEnumerator<float> CallEvent(IBaseEvent @event)
         {
-            if (propertyAllowed?.GetValue(@event) is false)
-                return;
+            if (checkAllowed && propertyAllowed?.GetValue(@event) is false)
+                yield break;
 
             Script luaScript = new();
             Lua.Internal.PrepareTable(luaScript.Globals);
@@ -86,18 +94,20 @@ internal static class Events
                 luaScript.Globals[luaEnum.Key] = luaEnum.Value;
 
             luaScript.Globals["SendLog"] = sendLog;
+            luaScript.Globals["PrintTime"] = (object)EventsExtensions.GetTime;
             luaScript.Globals["PrintPlayer"] = (object)EventsExtensions.PrintPlayer;
+            luaScript.Globals["IsOneFraction"] = (object)EventsExtensions.IsOneFraction;
 
             luaScript.DoString(translation.LuaScript);
             DynValue reply = luaScript.Globals.Get("reply");
 
             if (reply.IsNil())
-                return;
+                yield break;
 
             sendLog(reply.Type == DataType.String ? reply.String : reply.ToString());
             Log.Debug(type.Name);
-        });
 
+        }
     }
 
     private static bool ImplementsInterface(Type type, Type interfaceType)
