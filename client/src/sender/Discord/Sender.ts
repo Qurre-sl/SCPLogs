@@ -63,7 +63,7 @@ class Sender implements IClient {
 
         if (!channel) return;
 
-        if (message.length < 1024) {
+        if (message.length < 2000) {
             await channel.send({content: message});
             return;
         }
@@ -72,7 +72,7 @@ class Sender implements IClient {
         let cached = '';
 
         for (const part of messages) {
-            if (cached.length + part.length > 1024) {
+            if (cached.length + part.length > 2000) {
                 await channel.send({content: cached});
                 cached = '';
             }
