@@ -25,13 +25,24 @@
 - 🌐 4 протокола связи: HTTP, TCP, UDP, WebSocket
 - 🔄 Авто-реконнект при обрыве
 - 🎯 Discord, Telegram, WebHook
+- 🐳 Docker образы для клиента
+
+---
+
+## 📚 Документация
+
+<p align="center">
+  <a href="plugin/ExampleConfigs/README.md">
+    <img src="https://img.shields.io/badge/📝_Примеры_Lua_конфигов-00b813?style=for-the-badge" alt="Lua Examples"/>
+  </a>
+</p>
 
 ---
 
 ## Архитектура
 
 ```
-Plugin (C# + LabAPI)  ←→  Client (Deno + TypeScript)  ←→  Discord/Telegram/etc
+Plugin (C# + LabAPI)  ←→  Client (Deno + TypeScript)  ←→  Discord/Telegram/WebHook
       [Events]            [Socket Server]                  [Bot API]
 ```
 
@@ -122,6 +133,70 @@ SOCKET_TOKEN=ТАКОЙ_ЖЕ_КАК_В_scplogs.yml
 ```bash
 deno run --allow-all src/main.ts
 ```
+
+### 5. Client (Docker) 🐳
+
+**Pull & Run:**
+
+```bash
+docker pull ghcr.io/qurre-sl/scplogs:latest
+
+docker run -d \
+  --name scplogs \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -e SENDER_TYPE=discord \
+  -e SENDER_TIMEOUT_SECONDS=60 \
+  -e DISCORD_TOKEN=your_token \
+  -e DISCORD_COMMAND_GUILDS=123,456 \
+  -e DISCORD_ALLOWED_CHANNELS=789,012 \
+  -e SOCKET_TYPE=udp \
+  -e SOCKET_HOST=0.0.0.0 \
+  -e SOCKET_PORT=8080 \
+  -e SOCKET_TOKEN=your_token \
+  ghcr.io/qurre-sl/scplogs:latest
+```
+
+**Docker Compose (inline):**
+
+```yaml
+version: '3.8'
+services:
+  scplogs:
+    image: ghcr.io/qurre-sl/scplogs:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SENDER_TYPE: discord
+      SENDER_TIMEOUT_SECONDS: 60
+      DISCORD_TOKEN: your_token
+      DISCORD_COMMAND_GUILDS: "123,456"
+      DISCORD_ALLOWED_CHANNELS: "789,012"
+      SOCKET_TYPE: udp
+      SOCKET_HOST: 0.0.0.0
+      SOCKET_PORT: 8080
+      SOCKET_TOKEN: your_token
+```
+
+**Docker Compose (env_file):**
+
+```yaml
+version: '3.8'
+services:
+  scplogs:
+    image: ghcr.io/qurre-sl/scplogs:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+```
+
+**Теги:**
+- `latest` — stable релиз
+- `v3-preview`, `main`, `dev` — ветки разработки
+- `1.2.3`, `1.2`, `1` — версии
 
 ---
 
