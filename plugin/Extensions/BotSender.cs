@@ -2,13 +2,13 @@ namespace SCPLogs.Extensions;
 
 internal class BotSender : CommandSender
 {
+    private readonly string _argument;
+
     internal BotSender(string name, string argument)
     {
         Nickname = name;
         _argument = argument;
     }
-
-    private readonly string _argument;
 
     public override string Nickname { get; }
 
@@ -23,8 +23,12 @@ internal class BotSender : CommandSender
     }
 
     public override void RaReply(string text, bool success, bool logToConsole, string overrideDisplay)
-        => Main.Sender?.Reply(text, _argument);
+    {
+        Main.Sender?.Reply(text, _argument);
+    }
 
     public override void Print(string text)
-        => Main.Sender?.Reply(text, _argument);
+    {
+        Main.Sender?.Reply(text, _argument);
+    }
 }

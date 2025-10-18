@@ -7,6 +7,7 @@ using LabApi.Features.Console;
 using LabApi.Loader.Features.Paths;
 using MoonSharp.Interpreter;
 using SCPLogs.Extensions;
+using SCPLogs.Lua;
 
 namespace SCPLogs;
 
@@ -26,7 +27,6 @@ internal static class Events
     internal static void Unload()
     {
         foreach (var (eventInfo, handler) in RegisteredEvents)
-        {
             try
             {
                 eventInfo.RemoveEventHandler(null, handler);
@@ -35,7 +35,7 @@ internal static class Events
             {
                 Logger.Error($"Failed to unregister event {eventInfo.Name}: {ex.Message}");
             }
-        }
+
         RegisteredEvents.Clear();
     }
 
@@ -48,12 +48,11 @@ internal static class Events
             return;
         }
 
-        foreach (FileInfo file in _configsDirectory.GetFiles("*.lua"))
-        {
+        foreach (var file in _configsDirectory.GetFiles("*.lua"))
             try
             {
-                string eventName = Path.GetFileNameWithoutExtension(file.Name);
-                string luaScript = File.ReadAllText(file.FullName);
+                var eventName = Path.GetFileNameWithoutExtension(file.Name);
+                var luaScript = File.ReadAllText(file.FullName);
 
                 var config = ParseLuaConfig(luaScript);
                 config.EventName = eventName;
@@ -66,7 +65,6 @@ internal static class Events
             {
                 Logger.Error($"Failed to load Lua config from {file.Name}: {ex.Message}");
             }
-        }
     }
 
     private static LuaEventConfig ParseLuaConfig(string luaScript)
@@ -80,11 +78,14 @@ internal static class Events
             if (!trimmed.StartsWith("--")) break;
 
             if (trimmed.Contains("@enabled"))
+            {
                 config.Enabled = trimmed.Contains("true", StringComparison.OrdinalIgnoreCase);
+            }
             else if (trimmed.Contains("@channels"))
             {
                 var channelsStr = trimmed.Substring(trimmed.IndexOf("@channels") + 9).Trim();
-                config.Channels = channelsStr.Split(',').Select(c => c.Trim()).Where(c => !string.IsNullOrEmpty(c)).ToArray();
+                config.Channels = channelsStr.Split(',').Select(c => c.Trim()).Where(c => !string.IsNullOrEmpty(c))
+                    .ToArray();
             }
         }
 
@@ -93,7 +94,7 @@ internal static class Events
 
     private static void RegisterAllEvents()
     {
-        Assembly? labApiAssembly = AppDomain.CurrentDomain.GetAssemblies()
+        var labApiAssembly = AppDomain.CurrentDomain.GetAssemblies()
             .FirstOrDefault(a => a.GetName().Name == "LabApi");
 
         if (labApiAssembly == null)
@@ -103,12 +104,13 @@ internal static class Events
         }
 
         var eventHandlerTypes = labApiAssembly.GetTypes()
-            .Where(t => t.Namespace != null && t.Namespace == "LabApi.Events.Handlers" && t.IsClass && t.IsAbstract && t.IsSealed);
+            .Where(t => t.Namespace != null && t.Namespace == "LabApi.Events.Handlers" && t.IsClass && t.IsAbstract &&
+                        t.IsSealed);
 
         foreach (var eventHandlerType in eventHandlerTypes)
         {
             var events = eventHandlerType.GetEvents(BindingFlags.Public | BindingFlags.Static);
-            string classPrefix = eventHandlerType.Name;
+            var classPrefix = eventHandlerType.Name;
 
             foreach (var eventInfo in events)
             {
@@ -118,7 +120,7 @@ internal static class Events
                 if (!eventInfo.EventHandlerType.Name.StartsWith("LabEventHandler"))
                     continue;
 
-                string eventName = $"{classPrefix}.{eventInfo.Name}";
+                var eventName = $"{classPrefix}.{eventInfo.Name}";
 
                 RegisterEvent(eventInfo, eventName);
             }
@@ -130,17 +132,23 @@ internal static class Events
         if (!EventConfigs.TryGetValue(eventName, out var config) || !config.Enabled || config.Channels.Length == 0)
             return;
 
+        if (Main.Instance.Config?.DontSendEvents?.Contains(eventName) == true)
+        {
+            Logger.Debug($"Event {eventName} is in DontSendEvents list, skipping");
+            return;
+        }
+
         try
         {
-            Type? eventHandlerType = eventInfo.EventHandlerType;
-            MethodInfo? invokeMethod = eventHandlerType?.GetMethod("Invoke");
+            var eventHandlerType = eventInfo.EventHandlerType;
+            var invokeMethod = eventHandlerType?.GetMethod("Invoke");
 
             if (invokeMethod == null)
                 return;
 
-            ParameterInfo[] parameters = invokeMethod.GetParameters();
+            var parameters = invokeMethod.GetParameters();
 
-            Delegate? handler = parameters.Length switch
+            var handler = parameters.Length switch
             {
                 0 => new Action(() => ExecuteLuaEvent(eventName, config, new { })),
                 1 => CreateTypedHandler(parameters[0].ParameterType, eventName, config),
@@ -163,17 +171,18 @@ internal static class Events
 
     private static Delegate? CreateTypedHandler(Type argsType, string eventName, LuaEventConfig config)
     {
-        Type actionType = typeof(Action<>).MakeGenericType(argsType);
+        var actionType = typeof(Action<>).MakeGenericType(argsType);
 
-        MethodInfo? method = typeof(Events).GetMethod(nameof(ExecuteLuaEventGeneric), BindingFlags.NonPublic | BindingFlags.Static);
+        var method =
+            typeof(Events).GetMethod(nameof(ExecuteLuaEventGeneric), BindingFlags.NonPublic | BindingFlags.Static);
 
         if (method == null)
             return null;
-        
-        MethodInfo genericMethod = method.MakeGenericMethod(argsType);
+
+        var genericMethod = method.MakeGenericMethod(argsType);
 
         object[] args = [eventName, config];
-        Delegate handler = Delegate.CreateDelegate(actionType, args, genericMethod);
+        var handler = Delegate.CreateDelegate(actionType, args, genericMethod);
 
         return handler;
     }
@@ -188,29 +197,28 @@ internal static class Events
         try
         {
             Script luaScript = new();
-            Lua.Internal.PrepareTable(luaScript.Globals);
+            Internal.PrepareTable(luaScript.Globals);
 
-            Type argsType = eventArgs.GetType();
+            var argsType = eventArgs.GetType();
 
-            Lua.Internal.PreRegisterLuaType(argsType);
+            Internal.PreRegisterLuaType(argsType);
 
             var properties = argsType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
-            foreach (PropertyInfo property in properties)
-            {
+            foreach (var property in properties)
                 try
                 {
-                    Lua.Internal.RegisterLuaType(property.PropertyType);
+                    Internal.RegisterLuaType(property.PropertyType);
                     luaScript.Globals[property.Name] = property.GetValue(eventArgs);
 
                     if (property.PropertyType is { IsSealed: true, IsEnum: true })
-                        luaScript.Globals["Enum_" + property.PropertyType.Name] = UserData.CreateStatic(property.PropertyType);
+                        luaScript.Globals["Enum_" + property.PropertyType.Name] =
+                            UserData.CreateStatic(property.PropertyType);
                 }
                 catch
                 {
                     // Skip
                 }
-            }
 
             var sendLog = (string message, string[]? channels = null) =>
                 EventsExtensions.SendLog(message, channels ?? config.Channels);
@@ -221,11 +229,11 @@ internal static class Events
             luaScript.Globals["IsOneFraction"] = (object)EventsExtensions.IsOneFraction;
 
             luaScript.DoString(config.LuaScript);
-            DynValue reply = luaScript.Globals.Get("reply");
+            var reply = luaScript.Globals.Get("reply");
 
             if (!reply.IsNil())
             {
-                string message = reply.Type == DataType.String ? reply.String : reply.ToString();
+                var message = reply.Type == DataType.String ? reply.String : reply.ToString();
                 sendLog(message);
             }
         }

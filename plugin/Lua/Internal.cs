@@ -33,7 +33,7 @@ internal static class Internal
         else
             return;
 
-        string name = prefix + "_" + type.Name;
+        var name = prefix + "_" + type.Name;
         Globals.SetGlobalVariable(name, UserData.CreateStatic(type));
         Logger.Debug($"Registered in Lua global space: {name}, Type: {type.FullName}");
     }
@@ -42,7 +42,7 @@ internal static class Internal
     {
         try
         {
-            PropertyInfo? propertyBase = type.GetProperty("Base",
+            var propertyBase = type.GetProperty("Base",
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
             if (propertyBase is not null)
@@ -58,17 +58,14 @@ internal static class Internal
 
     internal static void PrepareTable(Table table)
     {
-        foreach (var variable in Globals.GetGlobalVariables())
-        {
-            table[variable.Key] = variable.Value;
-        }
+        foreach (var variable in Globals.GetGlobalVariables()) table[variable.Key] = variable.Value;
     }
 
     private static void RegisterEnums(Type type)
     {
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
-        foreach (PropertyInfo property in properties)
+        foreach (var property in properties)
         {
             if (property.PropertyType is not { IsSealed: true, IsEnum: true })
                 continue;

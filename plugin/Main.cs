@@ -5,6 +5,7 @@ using LabApi.Features.Console;
 using LabApi.Loader.Features.Plugins;
 using SCPLogs.Configs;
 using SCPLogs.Sockets;
+using SCPLogs.Sockets.Http;
 
 namespace SCPLogs;
 
@@ -46,7 +47,7 @@ public class Main : Plugin<Global>
 
         Sender = Config.Protocol switch
         {
-            Protocol.Http => new Sockets.Http.Client(),
+            Protocol.Http => new Client(),
             Protocol.Tcp => new Sockets.Tcp.Client(),
             Protocol.Udp => new Sockets.Udp.Client(),
             Protocol.WebSocket => new Sockets.WebSocket.Client(),

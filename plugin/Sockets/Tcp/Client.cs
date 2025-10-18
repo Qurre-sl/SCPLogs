@@ -6,18 +6,19 @@ using System.Threading.Tasks;
 using LabApi.Features.Console;
 using Newtonsoft.Json;
 using SCPLogs.Extensions;
+using Console = GameCore.Console;
 
 namespace SCPLogs.Sockets.Tcp;
 
 public class Client : ISender
 {
-    private TcpClient? _client;
-    private NetworkStream? _stream;
-    private bool _alive;
-    private readonly List<Message> _messages;
-    private int _failedAttempts;
     private const int MaxFailedAttempts = 5;
     private const int ReconnectDelayMs = 5000;
+    private readonly List<Message> _messages;
+    private bool _alive;
+    private TcpClient? _client;
+    private int _failedAttempts;
+    private NetworkStream? _stream;
 
     internal Client()
     {
@@ -30,46 +31,6 @@ public class Client : ISender
         _ = Task.Run(GetCommands);
         _ = Task.Run(UpdateOnline);
         _ = Task.Run(HandShake);
-    }
-
-    ~Client()
-    {
-        _alive = false;
-        _stream?.Close();
-        _client?.Close();
-    }
-
-    private async Task MaintainConnection()
-    {
-        while (_alive)
-        {
-            try
-            {
-                if (_client?.Connected != true)
-                {
-                    Logger.Info("Attempting TCP connection...");
-                    _client?.Close();
-                    _client = new TcpClient();
-                    await _client.ConnectAsync(Main.Instance.Config?.Ip ?? "127.0.0.1", (int)(Main.Instance.Config?.Port ?? 8080));
-                    _stream = _client.GetStream();
-                    _failedAttempts = 0;
-                    Logger.Info("TCP connected successfully");
-                }
-
-                await Task.Delay(5000);
-            }
-            catch (Exception ex)
-            {
-                _failedAttempts++;
-                Logger.Debug($"TCP connection attempt failed ({_failedAttempts}/{MaxFailedAttempts}): {ex.Message}");
-                _stream?.Close();
-                _client?.Close();
-                _stream = null;
-                _client = null;
-
-                await Task.Delay(ReconnectDelayMs);
-            }
-        }
     }
 
     public void Send(string data, string[] channels)
@@ -89,6 +50,45 @@ public class Client : ISender
                 source = argument
             });
         });
+    }
+
+    ~Client()
+    {
+        _alive = false;
+        _stream?.Close();
+        _client?.Close();
+    }
+
+    private async Task MaintainConnection()
+    {
+        while (_alive)
+            try
+            {
+                if (_client?.Connected != true)
+                {
+                    Logger.Info("Attempting TCP connection...");
+                    _client?.Close();
+                    _client = new TcpClient();
+                    await _client.ConnectAsync(Main.Instance.Config?.Ip ?? "127.0.0.1",
+                        (int)(Main.Instance.Config?.Port ?? 8080));
+                    _stream = _client.GetStream();
+                    _failedAttempts = 0;
+                    Logger.Info("TCP connected successfully");
+                }
+
+                await Task.Delay(5000);
+            }
+            catch (Exception ex)
+            {
+                _failedAttempts++;
+                Logger.Debug($"TCP connection attempt failed ({_failedAttempts}/{MaxFailedAttempts}): {ex.Message}");
+                _stream?.Close();
+                _client?.Close();
+                _stream = null;
+                _client = null;
+
+                await Task.Delay(ReconnectDelayMs);
+            }
     }
 
     private async Task CollectMessages()
@@ -142,10 +142,10 @@ public class Client : ISender
                 if (result?.Commands == null)
                     continue;
 
-                foreach (Command command in result.Commands)
+                foreach (var command in result.Commands)
                     try
                     {
-                        GameCore.Console.singleton.TypeCommand("/" + command.Raw,
+                        Console.singleton.TypeCommand("/" + command.Raw,
                             new BotSender(command.Author, command.Reply));
                     }
                     catch (Exception e)
@@ -244,7 +244,6 @@ public class Client : ISender
 
     private class GetCommandsResponse
     {
-        [JsonProperty("commands")]
-        public Command[]? Commands { get; set; }
+        [JsonProperty("commands")] public Command[]? Commands { get; set; }
     }
 }

@@ -10,158 +10,351 @@
    </a>
 </p>
 
-<h1 align="center">SCPLogs</h1>
+<h1 align="center">SCPLogs v3</h1>
 <p align="center">
-<img src="https://readme-typing-svg.herokuapp.com/?font=Fira+Code&pause=1000&color=3FF781&center=true&vCenter=true&width=435&lines=U+want?+Just+do+it.;Are+you+lazy?+Use+one+command.;Specific+needs?+We're+on+our+way.">
-</p>
-<p align="center">
-Первый плагин в своем роде, предоставляющий максимально возможную кастомизацию.
+<img src="https://readme-typing-svg.herokuapp.com/?font=Fira+Code&pause=1000&color=3FF781&center=true&vCenter=true&width=435&lines=LabAPI+%2B+Deno;4+%D0%BF%D1%80%D0%BE%D1%82%D0%BE%D0%BA%D0%BE%D0%BB%D0%B0+%D1%81%D0%B2%D1%8F%D0%B7%D0%B8;%D0%9F%D0%BE%D0%BB%D0%BD%D0%B0%D1%8F+%D0%BA%D0%B0%D1%81%D1%82%D0%BE%D0%BC%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F+Lua">
 </p>
 
-<h1 align="center">Конфиги</h1>
-<p align="center">
-Все ивенты подгружаются динамически и создают свою копию в конфигах Qurre, поэтому вам нет нужды ждать, пока обновится плагин и добавятся новые ивенты - они появятся автоматически при обновлении Qurre.
-</p>
-<h2 align="center">Конфиги плагина</h2>
-<h3 align="center">Global</h3>
-<p align="center">
-"Global" namespace содержит в себе следующие параметры:
+## Описание
 
-| Название            | Значение по умолчанию                                           | Тип переменной | Описание                                                                                                                                                                                                                                                     |
-|---------------------|-----------------------------------------------------------------|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Ip                  | 127.0.0.1                                                       | string         | IP-адрес клиента. Если установлен на том же хосте, тогда `127.0.0.1`, если нет - указанный в конфиге клиента.                                                                                                                                                |
-| Port                | 8080                                                            | uint           | Порт клиента. Должен совпадать с конфигом клиента.                                                                                                                                                                                                           |
-| Protocol            | 0 _(TCP)_                                                       | Protocol       | Используемый протокол для обмена сообщениями между клиентом и плагином.<br/>Актуальные значения можно посмотреть в /plugin/Sockets/Protocol.cs<br/>TCP = 0,<br/>UDP = 1,<br/>HTTP = 2,<br/>WebSocket = 3,<br/>RabbitMQ = 4                                   |
-| ClientToken         | GENERATE RANDOM                                                 | string         | Токен авторизации на клиенте. Должен совпадать с токеном сокета на клиенте.                                                                                                                                                                                  |
-| BadgeOnline         | reply = string.format(<br/>"%s/%s players", <br/>Count, Slots)  | string *(Lua)* | Lua script для установки статуса бота.<br/>Переданные переменные в среду Lua:<br/>"Count" (int) - текущее количество игроков;<br/>"Slots" (int) - количество слотов на сервере<br/>Необходимо установить глобальную переменную "reply" с текстом для вывода. |
-| SendUnAllowedEvents | ["RemoteAdminCommandEvent", "GameConsoleCommandEvent"]          | string[]       | Массив ивентов, которые будут вызваны, даже если имеют поле ev.Allowed == false.                                                                                                                                                                             |
+Система отправки игровых событий SCP:SL в Discord/Telegram/WebHook с максимальной кастомизацией через Lua скрипты.
 
-</p>
-<h3 align="center">Translations</h3>
-<p align="center">
-Содержат в себе массив объектов перевода, которые обновляются динамически с изменением Qurre.
-</p>
-<p align="center">
-Примерный вид:
-</p>
+**Основные фичи:**
+- 🔥 Каждое событие — отдельный `.lua` файл
+- ⚡ Автоматическая регистрация всех событий LabAPI
+- 🌐 4 протокола связи: HTTP, TCP, UDP, WebSocket
+- 🔄 Авто-реконнект при обрыве
+- 🎯 Discord, Telegram, WebHook
 
-```js
-"AlphaStartEvent": {
-    "Description": "Available arguments: {Player} (Qurre.API.Player); {Automatic} (System.Boolean); {Allowed} (System.Boolean);",
-    "LuaScript": "",
-    "Channels": [],
-    "Enabled": false
-},
+---
+
+## Архитектура
+
+```
+Plugin (C# + LabAPI)  ←→  Client (Deno + TypeScript)  ←→  Discord/Telegram/etc
+      [Events]            [Socket Server]                  [Bot API]
 ```
 
-| Название    | Тип переменной | Описание                                                                                          |
-|-------------|----------------|---------------------------------------------------------------------------------------------------|
-| Description | string         | Описание ивента. В общем, содержит себе перечень аргументов, передаваемых в среду Lua при вызове. |
-| LuaScript   | string         | Lua script, который вызывается при срабатывании ивента. Подробнее ниже.                           |
-| Channels    | string[]       | Массив с ID каналами/группами для отправки логов. Подробнее ниже.                                 |
-| Enabled     | bool           | Определяет, включен ли лог. Если переменная "LuaScript" пуста, то ивент будет выключен.           |
+### Plugin
+- **Фреймворк:** LabAPI
+- **Язык:** C# (.NET Standard 2.1)
+- **Задачи:** Собирает события игры, выполняет Lua скрипты, отправляет через сокеты
 
-<h3 align="center">Lua</h3>
-<p align="center">
-Содержит в себе настройки для окружения Lua
+### Client
+- **Runtime:** Deno 2.x
+- **Язык:** TypeScript
+- **Задачи:** Принимает события от плагина, отправляет в Discord/Telegram
 
-| Название         | Тип переменной | Описание                                                                      |
-|------------------|----------------|-------------------------------------------------------------------------------|
-| DeclareTypes     | DeclareType[]  | Массив с типами, которые будут объявлены в окружении Lua.<br/>Подробнее ниже. |
+---
 
-</p>
+## Установка
 
-<h4 align="center">DeclareType</h4>
-<p align="center">
+### 1. Плагин
 
-| Название | Тип переменной | Пример         | Описание                                                                       |
-|----------|----------------|----------------|--------------------------------------------------------------------------------|
-| TypeName | string         | System.IO.Path | Полное название типа для вложения.<br/>Содержит в себе namespace + class name. |
-| LuaName  | string         | System_Path    | Название типа, которое будет определено в глобальном окружении Lua.            |
+```bash
+# Скачать из релизов
+wget https://github.com/Qurre-sl/SCPLogs/releases/latest/download/SCPLogs.dll
 
-</p>
-<h6>Если вы хотите проиндексировать тип, но не хотите добавлять его в глобальное окружение Lua, то в "LuaName" укажите пустую строку ("").</h6>
-
-<h1 align="center">Lua Scripts</h1>
-<p align="center">
-В этом плагине вы не встретите привычных жестко закодированных конфигов и переводов. Вы вправе сами выбирать, какие логи выводить.
-</p><p align="center">
-В глобальную среду Lua передаются все значения, указанные в описании ивента (`Description`), а также следующие:
-
-| Название        | Значение по умолчанию | Тип переменной               | Описание                                                                                                                                                                                                                                                                                                                      |
-|-----------------|-----------------------|------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| SendLog         | method                | Action < string, string[]? > | Вызывает метод отправки лога.<br/>При его вызове, объявлять глобальную переменную "reply" не обязательно.<br/>Переменная string - текст лога.<br/>Переменная string[] - id каналов, в которые будет отправлен лог.<br/>Может быть null, тогда лог отправится в каналы из конфига.                                             |
-| PrintTime       | string                | Action < >                   | Возвращает строку с текущим временем.<br/>Позволяет указать дату в любом месте лога.<br/>При его использовании, дата в начало лога добавлена не будет.                                                                                                                                                                        |
-| PrintPlayer     | string                | Action < Player, bool? >     | Возвращает читаемый формат игрока [ nickname - userid (role) ]<br/>Является методом. Переменная bool (printRole) по умолчанию `true`                                                                                                                                                                                          |
-| IsOneFraction   | bool                  | Action < Player, Player >    | Возвращает значение, являются ли 2 игрока одной фракции. Если кто-то из игроков уже помер, то берется роль из кэша.                                                                                                                                                                                                           |
-|                 |                       |                              |                                                                                                                                                                                                                                                                                                                               |
-| API_Server      | Class                 | Qurre.API.Server             | Содержит в себе класс Server от Qurre API.                                                                                                                                                                                                                                                                                    |
-| API_{Type}      | Class                 | Qurre.API.{Type}             | Содержит в себе статический класс Qurre API.<br/>Чтобы увидеть полный список, включите "Debug" в конфигах Qurre.<br/>Логи выведут список всех добавленных API в среду Lua.                                                                                                                                                    |
-| API_Enum_{Type} | Enum                  | Qurre.API.Objects.{Type}     | Содержит в себе enum из Qurre.API.Objects.<br/>Подробный список выводится с включенным "Debug"                                                                                                                                                                                                                                |
-| Enum_{Type}     | Enum                  | -                            | Содержит в себе enum из аргументов ивента.<br/>Например в ивенте "JailbirdTriggerEvent" для параметра "Message" будет создана дополнительная глобальная переменная "Enum_JailbirdMessageType" для взаимодействия с переменной "Message"<br/>Если переменная уже была создана в API_Enum_{Type}, то по новой создана не будет. |
-
-Плагины могут добавлять собственные переменные. Для этого обратитесь к документации соответствующих плагинов.
-</p><p align="center">
-Если вы не знаете основ Lua, то можете воспользоваться [конвертерами кода](https://www.codeconvert.ai/csharp-to-lua-converter), либо изучить синтаксис Lua.
-</p><p align="center">
-При объявлении глобальной переменной [`reply`], плагин ее обработает и отправит клиенту.
-</p><p align="center">
-Примерный вид:
-
-```lua
--- JoinEvent (это писать не обязательно)
-
-reply = string.format("✨ Присоединился игрок **%s**, IP: %s", PrintPlayer(Player), Player.UserInformation.Ip)
+# Или скомпилировать
+cd plugin
+dotnet build -c Release
 ```
-</p><p align="center">
-Еще один пример с enum:
 
-```lua
--- EffectEnabledEvent
+Поместить `SCPLogs.dll` в `AppData/SCP Secret Laboratory/LabAPI/plugins/`
 
-reply = string.format("🎈 %s получил эффект %s", PrintPlayer(Player), tostring(Type))
+### 2. Конфигурация плагина
+
+После первого запуска создастся `LabAPI/configs/scplogs.yml`:
+
+```yaml
+ip: 127.0.0.1
+port: 8080
+protocol: udp # http | tcp | udp | websocket
+clientToken: СМЕНИ_МЕНЯ_НА_РАНДОМНЫЙ_ТОКЕН
+badgeOnline: "reply = string.format(\"%s/%s players\", Count, Slots)"
+dontSendEvents: []
+luaConfig:
+  declareTypes:
+    - typeName: System.DateTime
+      luaName: System_DateTime
 ```
-</p><p align="center">
-Что-нибудь посложнее:
+
+### 3. Lua события
+
+Создать папку `LabAPI/configs/SCPLogs/` и добавить `.lua` файлы для нужных событий.
+
+**Формат имени:** `{ClassName}.{EventName}.lua`
+
+Примеры в `/plugin/ExampleConfigs/` — скопировать оттуда и настроить.
+
+### 4. Client
+
+```bash
+# Установить Deno (если нет)
+curl -fsSL https://deno.land/install.sh | sh
+
+cd client
+cp env.example .env
+nano .env  # настроить токены и каналы
+```
+
+**Настройка `.env`:**
+
+```bash
+# === Sender (куда отправлять) ===
+SENDER_TYPE=discord # discord | telegram | webhook
+SENDER_TIMEOUT_SECONDS=60
+
+# Discord
+DISCORD_TOKEN=твой_токен_бота
+DISCORD_COMMAND_GUILDS=123456789,987654321
+DISCORD_ALLOWED_CHANNELS=123456789,987654321
+
+# === Socket (откуда принимать) ===
+SOCKET_TYPE=udp # http | tcp | udp | websocket
+SOCKET_HOST=127.0.0.1
+SOCKET_PORT=8080
+SOCKET_TOKEN=ТАКОЙ_ЖЕ_КАК_В_scplogs.yml
+```
+
+**Запуск:**
+
+```bash
+deno run --allow-all src/main.ts
+```
+
+---
+
+## Lua события
+
+### Формат файла
+
+**Файл:** `LabAPI/configs/SCPLogs/PlayerEvents.Joined.lua`
 
 ```lua
--- RoundEndEvent
--- Необходимо объявить "System.IO.Path" (TypeName) с именем "System_Path" (LuaName) в конфиге "Lua.DeclareTypes"
+-- @enabled true
+-- @channels 123456789,987654321
+--
+-- Доступные значения:
+-- Player - игрок (LabApi.Features.Wrappers.Players.Player)
+--   Player.DisplayName - никнейм
+--   Player.UserId - Steam ID
+--   Player.Role - текущая роль (RoleTypeId)
+--
+-- Функции:
+-- SendLog(message, channels?) - отправить лог
+-- PrintTime() - Discord timestamp
+-- PrintPlayer(player, printRole?) - форматированная инфа об игроке
+-- IsOneFraction(player1, player2) - одна ли фракция
 
-SendLog(string.format("✨ Победила команда %s, раунд начнется через %s секунд. Текущий раунд: %s", Winner, ToRestart, API_Round.CurrentRound()))
+reply = string.format("%s Игрок **%s** подключился к серверу",
+    PrintTime(),
+    Player.DisplayName)
+```
 
-API_GlobalLights.TurnOff(100)
+### Список событий
 
-if Winner == 0 then
-    API_AudioExtensions.PlayInIntercom(System_Path.Combine(API_Paths.Plugins, "Audio/BackupPower.raw"))
-elseif Winner == 1 then
-    API_AudioExtensions.PlayInIntercom(System_Path.Combine(API_Paths.Plugins, "Audio/NuclearAttack.raw"))
+Все события из `LabApi.Events.Handlers.*`:
+
+- `PlayerEvents.Joined` / `PlayerEvents.Left`
+- `PlayerEvents.Death` / `PlayerEvents.Dying`
+- `PlayerEvents.Escaping` / `PlayerEvents.Escaped`
+- `ServerEvents.RoundStarted` / `ServerEvents.RoundEnded`
+- `WarheadEvents.Starting` / `WarheadEvents.Detonated`
+- И т.д. — полный список в исходниках LabAPI
+
+### Где хранятся
+
+```
+AppData/SCP Secret Laboratory/LabAPI/configs/SCPLogs/
+├── PlayerEvents.Joined.lua
+├── PlayerEvents.Death.lua
+├── ServerEvents.RoundStarted.lua
+└── ...
+```
+
+---
+
+## Протоколы
+
+| Протокол  | Описание | Рекомендация |
+|-----------|----------|--------------|
+| **UDP**   | Датаграммы, быстро | ✅ Рекомендуется |
+| **TCP**   | Потоковое соединение | Стабильное |
+| **HTTP**  | REST API через Deno.serve | Для дебага |
+| **WebSocket** | Двустороннее | Оверкилл |
+
+Все поддерживают авто-реконнект при обрыве связи.
+
+---
+
+## Конфигурация
+
+### scplogs.yml
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `ip` | string | IP клиента (127.0.0.1 если на том же хосте) |
+| `port` | uint | Порт клиента (должен совпадать с `.env`) |
+| `protocol` | enum | `http` / `tcp` / `udp` / `websocket` |
+| `clientToken` | string | Токен авторизации (должен совпадать с `.env`) |
+| `badgeOnline` | string | Lua для статуса бота (переменные: `Count`, `Slots`) |
+| `dontSendEvents` | string[] | Список событий которые НЕ отправлять |
+| `luaConfig.declareTypes` | array | Дополнительные типы для Lua |
+
+### Lua файл
+
+Специальные комментарии в начале файла:
+
+```lua
+-- @enabled true|false - включить/выключить событие
+-- @channels 123,456 - ID каналов Discord/Telegram (через запятую)
+```
+
+---
+
+## Фишки
+
+### 1. Динамическая регистрация событий
+
+Плагин автоматически подхватывает **все** события из LabAPI. Не нужно ждать обновления плагина при добавлении новых событий в LabAPI.
+
+### 2. Кеширование типов Lua
+
+Типы регистрируются один раз при загрузке → производительность.
+
+### 3. Независимость сокетов
+
+Client использует dynamic imports — если выбран UDP, не загружаются зависимости для HTTP/TCP/WebSocket.
+
+### 4. Фильтрация событий
+
+Через `dontSendEvents` можно исключить события из отправки (например, спам-события).
+
+### 5. Отдельные Lua на событие
+
+Вместо одного огромного конфига — каждое событие в отдельном файле. Легко управлять и шарить между серверами.
+
+---
+
+## Примеры Lua
+
+### Простой
+
+```lua
+-- @enabled true
+-- @channels 123456789
+
+reply = PrintTime() .. " Раунд начался!"
+```
+
+### С проверкой
+
+```lua
+-- @enabled true
+-- @channels 123456789
+
+if Attacker ~= nil then
+    reply = string.format("%s %s убил %s",
+        PrintTime(),
+        PrintPlayer(Attacker),
+        PrintPlayer(Player))
 else
-    API_AudioExtensions.PlayInIntercom(System_Path.Combine(API_Paths.Plugins, "Audio/RoundStart/cutscene.raw"))
+    reply = string.format("%s %s умер",
+        PrintTime(),
+        PrintPlayer(Player))
 end
 ```
-</p>
 
-> [!Warning]
-> **Если метод "tostring" у enum выводит числовое значение, то проиндексируйте его, объявив в конфиге "Lua".**
+### С отправкой в разные каналы
 
-<hr>
+```lua
+-- @enabled true
+-- @channels 123456789
 
-<h1 align="center">Установка</h1>
-<h2 align="center">Установка плагина</h2>
-<h3 align="center">Автоматическая</h3>
-/ потом придумаю /
-<h3 align="center">Ручная</h3>
+if Player.Role == RoleTypeId.Scp096 then
+    SendLog("SCP-096 сбежал!", {"111111111"})
+end
 
-1. Перейдите в релизы и скачайте архив plugin.zip
-2. Откройте архив, и перенесите файлы в папку %appdata%/Qurre/Plugins
-    1. SCPLogs перенесите в папку "Plugins"
-    2. Файлы из папки "Dependencies" перенесите в соответствующую папку.
+reply = PrintTime() .. " Игрок сбежал: " .. PrintPlayer(Player)
+```
 
-<h2 align="center">Установка клиента</h2>
-<h3 align="center">Автоматическая</h3>
-/ гайд для развертывания докера /
-<h3 align="center">Ручная</h3>
-/ в процессе /
+---
+
+## Troubleshooting
+
+### Плагин не загружается
+
+1. Проверить что LabAPI установлен и работает
+2. Проверить что нет конфликтов версий .NET
+3. Посмотреть логи в `AppData/SCP Secret Laboratory/LabAPI/logs/`
+
+### Client не подключается
+
+1. Проверить совпадение `clientToken` в `.yml` и `.env`
+2. Проверить совпадение портов
+3. Проверить что выбран одинаковый протокол
+4. Убедиться что файрволл не блокирует порт
+
+### События не отправляются
+
+1. Проверить что `.lua` файлы в правильной папке
+2. Проверить что `@enabled true`
+3. Проверить что `@channels` указаны правильные ID
+4. Проверить что событие не в списке `dontSendEvents`
+
+---
+
+## Разработка
+
+### Добавить новое событие
+
+1. Создать `LabAPI/configs/SCPLogs/{EventClass}.{EventName}.lua`
+2. Настроить `@enabled` и `@channels`
+3. Написать логику в Lua
+4. Перезагрузить плагин (`reload plugins` в RA)
+
+### Структура проекта
+
+```
+SCPLogs/
+├── plugin/                  # C# плагин
+│   ├── Main.cs             # Точка входа
+│   ├── Events.cs           # Система событий
+│   ├── Configs/            # Классы конфигов
+│   ├── Sockets/            # HTTP/TCP/UDP/WebSocket клиенты
+│   ├── Lua/                # Lua интеграция (MoonSharp)
+│   └── Extensions/         # Хелперы
+├── client/                  # Deno клиент
+│   └── src/
+│       ├── main.ts         # Точка входа
+│       ├── sockets/        # Серверы протоколов
+│       └── senders/        # Discord/Telegram/WebHook
+└── LabAPI/                  # Исходники LabAPI (submodule)
+```
+
+---
+
+## FAQ
+
+**Q: Чем отличается от v2?**
+A: v3 использует LabAPI вместо Qurre, отдельные Lua файлы вместо монолитного конфига, Deno вместо Node.js
+
+**Q: Поддерживается ли Qurre?**
+A: Нет, только LabAPI. Для Qurre используй v2.
+
+**Q: Можно ли использовать несколько клиентов на один плагин?**
+A: Нет, one-to-one. Но можно отправлять в разные каналы через `SendLog()`.
+
+**Q: Как обновить плагин?**
+A: Заменить `.dll`, конфиги сохранятся. Lua файлы — ручная миграция.
+
+---
+
+## Лицензия
+
+MIT License - делай че хочешь.
+
+---
 
 <p align="center"><img src="https://count.getloli.com/get/@SCPLogs"></p>

@@ -7,18 +7,19 @@ using System.Threading.Tasks;
 using LabApi.Features.Console;
 using Newtonsoft.Json;
 using SCPLogs.Extensions;
+using Console = GameCore.Console;
 
 namespace SCPLogs.Sockets.WebSocket;
 
 public class Client : ISender
 {
-    private ClientWebSocket? _webSocket;
-    private bool _alive;
-    private readonly List<Message> _messages;
-    private CancellationTokenSource _cts;
-    private int _failedAttempts;
     private const int MaxFailedAttempts = 5;
     private const int ReconnectDelayMs = 5000;
+    private readonly List<Message> _messages;
+    private bool _alive;
+    private CancellationTokenSource _cts;
+    private int _failedAttempts;
+    private ClientWebSocket? _webSocket;
 
     internal Client()
     {
@@ -32,13 +33,6 @@ public class Client : ISender
         _ = Task.Run(GetCommands);
         _ = Task.Run(UpdateOnline);
         _ = Task.Run(HandShake);
-    }
-
-    ~Client()
-    {
-        _alive = false;
-        _cts.Cancel();
-        _webSocket?.Dispose();
     }
 
     public void Send(string data, string[] channels)
@@ -60,10 +54,16 @@ public class Client : ISender
         });
     }
 
+    ~Client()
+    {
+        _alive = false;
+        _cts.Cancel();
+        _webSocket?.Dispose();
+    }
+
     private async Task MaintainConnection()
     {
         while (_alive)
-        {
             try
             {
                 if (_webSocket?.State != WebSocketState.Open)
@@ -75,7 +75,8 @@ public class Client : ISender
                     _cts = new CancellationTokenSource();
                     _webSocket = new ClientWebSocket();
 
-                    var uri = new Uri($"ws://{Main.Instance.Config?.Ip ?? "127.0.0.1"}:{Main.Instance.Config?.Port ?? 8080}");
+                    var uri = new Uri(
+                        $"ws://{Main.Instance.Config?.Ip ?? "127.0.0.1"}:{Main.Instance.Config?.Port ?? 8080}");
                     await _webSocket.ConnectAsync(uri, _cts.Token);
                     _failedAttempts = 0;
                     Logger.Info($"WebSocket connected to {uri}");
@@ -86,14 +87,14 @@ public class Client : ISender
             catch (Exception ex)
             {
                 _failedAttempts++;
-                Logger.Debug($"WebSocket connection attempt failed ({_failedAttempts}/{MaxFailedAttempts}): {ex.Message}");
+                Logger.Debug(
+                    $"WebSocket connection attempt failed ({_failedAttempts}/{MaxFailedAttempts}): {ex.Message}");
 
                 _webSocket?.Dispose();
                 _webSocket = null;
 
                 await Task.Delay(ReconnectDelayMs);
             }
-        }
     }
 
     private async Task CollectMessages()
@@ -147,10 +148,10 @@ public class Client : ISender
                 if (result?.Commands == null)
                     continue;
 
-                foreach (Command command in result.Commands)
+                foreach (var command in result.Commands)
                     try
                     {
-                        GameCore.Console.singleton.TypeCommand("/" + command.Raw,
+                        Console.singleton.TypeCommand("/" + command.Raw,
                             new BotSender(command.Author, command.Reply));
                     }
                     catch (Exception e)
@@ -252,7 +253,6 @@ public class Client : ISender
 
     private class GetCommandsResponse
     {
-        [JsonProperty("commands")]
-        public Command[]? Commands { get; set; }
+        [JsonProperty("commands")] public Command[]? Commands { get; set; }
     }
 }

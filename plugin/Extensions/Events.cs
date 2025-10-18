@@ -24,7 +24,7 @@ internal static class EventsExtensions
             return;
         }
 
-        string time = string.Empty;
+        var time = string.Empty;
 
         if (!message.Contains("<t:"))
             time = GetTime() + " ";
@@ -34,8 +34,8 @@ internal static class EventsExtensions
 
     internal static bool IsOneFraction(Player first, Player second)
     {
-        RoleTypeId roleType1 = first.Role;
-        RoleTypeId roleType2 = second.Role;
+        var roleType1 = first.Role;
+        var roleType2 = second.Role;
 
         /* TODO: make it when will add in labapi
         if (roleType1 is RoleTypeId.Spectator or RoleTypeId.None)
@@ -50,8 +50,8 @@ internal static class EventsExtensions
 
     internal static string PrintPlayer(Player player, bool printRole = true)
     {
-        string nickname = BlockRegex.Replace(player.DisplayName, "?");
-        string reply = $"`{nickname}` - {player.UserId}";
+        var nickname = BlockRegex.Replace(player.DisplayName, "?");
+        var reply = $"`{nickname}` - {player.UserId}";
 
         if (printRole)
             reply += $" ({GetRolePrint(player)})";
@@ -61,10 +61,12 @@ internal static class EventsExtensions
 
     internal static string GetRolePrint(Player player)
     {
-        RoleTypeId roleType = player.CurrentRole;
+        var roleType = player.Role;
 
+        /* TODO: make it when will add in labapi
         if (roleType is RoleTypeId.Spectator or RoleTypeId.None)
             roleType = player.PreviousRole;
+        */
 
         return $"{roleType}";
     }

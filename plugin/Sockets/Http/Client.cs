@@ -2,28 +2,31 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using LabApi.Features.Console;
 using Newtonsoft.Json;
 using SCPLogs.Extensions;
+using Console = GameCore.Console;
 
 namespace SCPLogs.Sockets.Http;
 
 public class Client : ISender
 {
-    private readonly HttpClient _httpClient;
-    private readonly Uri _host;
-    private bool _alive;
-    private readonly List<Message> _messages;
-    private int _failedAttempts;
     private const int MaxFailedAttempts = 5;
     private const int ReconnectDelayMs = 5000;
+    private readonly Uri _host;
+    private readonly HttpClient _httpClient;
+    private readonly List<Message> _messages;
+    private bool _alive;
+    private int _failedAttempts;
 
     internal Client()
     {
         _httpClient = new HttpClient();
         _httpClient.Timeout = TimeSpan.FromSeconds(10);
-        _httpClient.DefaultRequestHeaders.Authorization = new("Bearer", Main.Instance.Config?.ClientToken ?? "");
+        _httpClient.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", Main.Instance.Config?.ClientToken ?? "");
 
         _host = new Uri($"http://{Main.Instance.Config?.Ip ?? "127.0.0.1"}:{Main.Instance.Config?.Port ?? 8080}/");
         _alive = true;
@@ -35,9 +38,6 @@ public class Client : ISender
         _ = Task.Run(UpdateOnline);
         _ = Task.Run(HandShake);
     }
-    
-    ~Client()
-        => _alive = false;
 
     public void Send(string data, string[] channels)
     {
@@ -52,10 +52,16 @@ public class Client : ISender
             { "source", argument }
         });
 
-        _ = Task.Run(async () => {
+        _ = Task.Run(async () =>
+        {
             await HandleRequest(_httpClient.PostAsync(_host.AbsoluteUri + "Reply", content),
                 "sending the command response");
         });
+    }
+
+    ~Client()
+    {
+        _alive = false;
     }
 
     private async Task CollectMessages()
@@ -83,7 +89,6 @@ public class Client : ISender
             {
                 Logger.Debug(ex);
             }
-
         }
     }
 
@@ -93,7 +98,7 @@ public class Client : ISender
         {
             await Task.Delay(1000);
 
-            string reply = await HandleRequestAndGet(_httpClient.GetAsync(_host.AbsoluteUri + "Commands"),
+            var reply = await HandleRequestAndGet(_httpClient.GetAsync(_host.AbsoluteUri + "Commands"),
                 "getting commands from client");
 
             if (string.IsNullOrEmpty(reply))
@@ -104,10 +109,10 @@ public class Client : ISender
             if (json is null)
                 continue;
 
-            foreach (Command command in json)
+            foreach (var command in json)
                 try
                 {
-                    GameCore.Console.singleton.TypeCommand("/" + command.Raw,
+                    Console.singleton.TypeCommand("/" + command.Raw,
                         new BotSender(command.Author, command.Reply));
                 }
                 catch (Exception e)
@@ -148,7 +153,7 @@ public class Client : ISender
     {
         try
         {
-            HttpResponseMessage response = await task;
+            var response = await task;
 
             if (response.StatusCode == HttpStatusCode.OK)
             {
@@ -156,7 +161,7 @@ public class Client : ISender
                 return;
             }
 
-            string responseString = await response.Content.ReadAsStringAsync();
+            var responseString = await response.Content.ReadAsStringAsync();
             Logger.Error($"Caused error when {job}:\n{responseString}");
             await HandleFailure();
         }
@@ -171,8 +176,8 @@ public class Client : ISender
     {
         try
         {
-            HttpResponseMessage response = await task;
-            string responseString = await response.Content.ReadAsStringAsync();
+            var response = await task;
+            var responseString = await response.Content.ReadAsStringAsync();
 
             if (response.StatusCode == HttpStatusCode.OK)
             {

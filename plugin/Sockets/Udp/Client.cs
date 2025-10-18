@@ -7,17 +7,18 @@ using System.Threading.Tasks;
 using LabApi.Features.Console;
 using Newtonsoft.Json;
 using SCPLogs.Extensions;
+using Console = GameCore.Console;
 
 namespace SCPLogs.Sockets.Udp;
 
 public class Client : ISender
 {
+    private const int MaxFailedAttempts = 5;
+    private readonly List<Message> _messages;
+    private bool _alive;
     private UdpClient? _client;
     private IPEndPoint? _endpoint;
-    private bool _alive;
-    private readonly List<Message> _messages;
     private int _failedAttempts;
-    private const int MaxFailedAttempts = 5;
 
     internal Client()
     {
@@ -27,7 +28,8 @@ public class Client : ISender
 
         try
         {
-            _endpoint = new IPEndPoint(IPAddress.Parse(Main.Instance.Config?.Ip ?? "127.0.0.1"), (int)(Main.Instance.Config?.Port ?? 8080));
+            _endpoint = new IPEndPoint(IPAddress.Parse(Main.Instance.Config?.Ip ?? "127.0.0.1"),
+                (int)(Main.Instance.Config?.Port ?? 8080));
             _client = new UdpClient();
 
             _ = Task.Run(CollectMessages);
@@ -40,12 +42,6 @@ public class Client : ISender
             Logger.Error($"UDP initialization error: {ex}");
             _alive = false;
         }
-    }
-
-    ~Client()
-    {
-        _alive = false;
-        _client?.Close();
     }
 
     public void Send(string data, string[] channels)
@@ -65,6 +61,12 @@ public class Client : ISender
                 source = argument
             });
         });
+    }
+
+    ~Client()
+    {
+        _alive = false;
+        _client?.Close();
     }
 
     private async Task CollectMessages()
@@ -118,10 +120,10 @@ public class Client : ISender
                 if (result?.Commands == null)
                     continue;
 
-                foreach (Command command in result.Commands)
+                foreach (var command in result.Commands)
                     try
                     {
-                        GameCore.Console.singleton.TypeCommand("/" + command.Raw,
+                        Console.singleton.TypeCommand("/" + command.Raw,
                             new BotSender(command.Author, command.Reply));
                     }
                     catch (Exception e)
@@ -202,6 +204,7 @@ public class Client : ISender
                     Logger.Warn("UDP communication timeout, recreating client...");
                     RecreateClient();
                 }
+
                 return string.Empty;
             }
 
@@ -241,7 +244,6 @@ public class Client : ISender
 
     private class GetCommandsResponse
     {
-        [JsonProperty("commands")]
-        public Command[]? Commands { get; set; }
+        [JsonProperty("commands")] public Command[]? Commands { get; set; }
     }
 }
