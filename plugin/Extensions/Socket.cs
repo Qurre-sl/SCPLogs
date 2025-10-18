@@ -1,6 +1,5 @@
-using System.Linq;
+using LabApi.Features.Wrappers;
 using MoonSharp.Interpreter;
-using Qurre.API;
 
 namespace SCPLogs.Extensions;
 
@@ -11,10 +10,10 @@ internal static class SocketExtensions
         Script luaScript = new();
         Lua.Internal.PrepareTable(luaScript.Globals);
 
-        luaScript.Globals["Count"] = Player.List.Count();
+        luaScript.Globals["Count"] = Player.List.Count;
         luaScript.Globals["Slots"] = CustomNetworkManager.slots;
 
-        luaScript.DoString(Main.GlobalConfig.BadgeOnline);
+        luaScript.DoString(Main.Instance.Config?.BadgeOnline ?? "reply = \"\"");
         DynValue reply = luaScript.Globals.Get("reply");
 
         if (reply.IsNil())

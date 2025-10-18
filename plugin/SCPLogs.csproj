@@ -8,23 +8,20 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Reference Include="0Harmony">
-        <HintPath>..\lib\0Harmony.dll</HintPath>
-      </Reference>
       <Reference Include="Assembly-CSharp">
         <HintPath>..\lib\Assembly-CSharp_public.dll</HintPath>
       </Reference>
       <Reference Include="Assembly-CSharp-firstpass">
         <HintPath>..\lib\Assembly-CSharp-firstpass.dll</HintPath>
       </Reference>
+      <Reference Include="LabApi">
+        <HintPath>..\lib\LabApi.dll</HintPath>
+      </Reference>
       <Reference Include="MoonSharp.Interpreter">
         <HintPath>..\lib\MoonSharp.Interpreter.dll</HintPath>
       </Reference>
       <Reference Include="Newtonsoft.Json">
         <HintPath>..\lib\Newtonsoft.Json.dll</HintPath>
-      </Reference>
-      <Reference Include="Qurre">
-        <HintPath>..\lib\Qurre.dll</HintPath>
       </Reference>
       <Reference Include="UnityEngine">
         <HintPath>..\lib\UnityEngine.dll</HintPath>

@@ -1,0 +1,15 @@
+{
+  "tasks": {
+    "dev": "deno run --watch main.ts"
+  },
+  "imports": {
+    "#constants.ts": "./src/constants.ts",
+    "#validate.ts": "./src/validate.ts",
+    "#senders/": "./src/senders/",
+    "#sockets/": "./src/sockets/",
+    "@discordeno/bot": "npm:@discordeno/bot@21.0.0",
+    "@discordeno/types": "npm:@discordeno/types@^21.0.0",
+    "@sentry/deno": "npm:@sentry/deno@^10.20.0",
+    "zod": "npm:zod@4.1.12"
+  }
+}

@@ -1,7 +1,7 @@
 using System;
 using System.Reflection;
+using LabApi.Features.Console;
 using MoonSharp.Interpreter;
-using Qurre.API;
 
 namespace SCPLogs.Lua;
 
@@ -12,18 +12,16 @@ internal static class Internal
         if (type.Namespace is null)
             return;
 
-        if (!(type.Namespace == "Qurre.API" ||
-              type.Namespace.StartsWith("Qurre.API.Objects") ||
-              type.Namespace.StartsWith("Qurre.API.Controllers") ||
-              type.Namespace.StartsWith("Qurre.API.Classification") ||
-              type.Namespace.StartsWith("Qurre.API.Addons")))
+        if (!(type.Namespace == "LabApi.Features" ||
+              type.Namespace.StartsWith("LabApi.Features.Wrappers") ||
+              type.Namespace.StartsWith("LabApi.Events.Arguments")))
             return;
 
         RegisterLuaType(type);
 
         if (type is not { IsSealed: true, IsPublic: true })
             return;
-        
+
         RegisterEnums(type);
 
         string prefix;
@@ -37,7 +35,7 @@ internal static class Internal
 
         string name = prefix + "_" + type.Name;
         Globals.SetGlobalVariable(name, UserData.CreateStatic(type));
-        Log.Debug($"Registered in Lua global space: {name}, Type: {type.FullName}");
+        Logger.Debug($"Registered in Lua global space: {name}, Type: {type.FullName}");
     }
 
     internal static void RegisterLuaType(Type type)
@@ -54,7 +52,7 @@ internal static class Internal
         }
         catch (Exception ex)
         {
-            Log.Warn(type + "\n" + ex.Message);
+            Logger.Warn(type + "\n" + ex.Message);
         }
     }
 

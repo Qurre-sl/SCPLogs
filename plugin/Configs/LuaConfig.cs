@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using HarmonyLib;
+using LabApi.Features.Console;
 using MoonSharp.Interpreter;
-using Qurre.API;
 
 namespace SCPLogs.Configs;
 
@@ -40,7 +40,7 @@ public class LuaConfig
             }
             catch (Exception ex)
             {
-                Log.Warn($"Failed to declare class “{declareType.TypeName}” in global Lua-space: \n{ex.Message}");
+                Logger.Warn($"Failed to declare class \"{declareType.TypeName}\" in global Lua-space: \n{ex.Message}");
             }
         }
     }

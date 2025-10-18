@@ -1,0 +1,77 @@
+{
+  "version": "5",
+  "specifiers": {
+    "npm:@discordeno/bot@21.0.0": "21.0.0",
+    "npm:@discordeno/types@21": "21.0.0",
+    "npm:@sentry/deno@^10.20.0": "10.20.0",
+    "npm:zod@4.1.12": "4.1.12"
+  },
+  "npm": {
+    "@discordeno/bot@21.0.0": {
+      "integrity": "sha512-x6EcVHBvWIhjY5/lcwgZzzCiqdpKFZqu2qUaZqKb7RYS8L8Q8zY40hCnbToVehLB8+BGcnHzxCeEvWWg8tnT/g==",
+      "dependencies": [
+        "@discordeno/gateway",
+        "@discordeno/rest",
+        "@discordeno/types",
+        "@discordeno/utils"
+      ]
+    },
+    "@discordeno/gateway@21.0.0": {
+      "integrity": "sha512-ur5Hatd1x86PPI4UnXKghAWat3vS90NvLJcpOSu1B1gYSENRZow8dohZ8Ov58SXWq5nZVuBYDJNCR248pWJvrg==",
+      "dependencies": [
+        "@discordeno/types",
+        "@discordeno/utils",
+        "ws"
+      ],
+      "optionalDependencies": [
+        "fzstd"
+      ]
+    },
+    "@discordeno/rest@21.0.0": {
+      "integrity": "sha512-ew5ddhUd7Qyv/GSzCy42bEmRv0yr2PspCMsLD/NeMiTLd3+OrVN5pAxBN9z+9JpS/daiiD/PVmvuUAVx/nXTEw==",
+      "dependencies": [
+        "@discordeno/types",
+        "@discordeno/utils"
+      ]
+    },
+    "@discordeno/types@21.0.0": {
+      "integrity": "sha512-TUZAEqqlXRNQji+NCaQo8DruzI8rXbBvMaZYsZvN9f03PrdSddzMOy3cjs4eeL6ZMVocmMVRIaVnB713blylCw=="
+    },
+    "@discordeno/utils@21.0.0": {
+      "integrity": "sha512-I7I3Szlk+LkT/CRmJJiLPsjuBUjbuXUCvOzsgWCltkxDMIGmQeNoQtFK7t89V1Gcc4icsrnHVMho1BcaAITijg==",
+      "dependencies": [
+        "@discordeno/types"
+      ]
+    },
+    "@opentelemetry/api@1.9.0": {
+      "integrity": "sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg=="
+    },
+    "@sentry/core@10.20.0": {
+      "integrity": "sha512-S291KihnOIB8i7mVJIJBVHBMcCfIoY/KDJBHEfBoHY9M56g2An4FVhM9+/xR85+IoMkTySdXN08k9LEyQz4FpQ=="
+    },
+    "@sentry/deno@10.20.0": {
+      "integrity": "sha512-ftxpNAJ5vnArzha8Tn72dP/gSlHdTM/3XUBgK+aJT6f+zKvjR1e7ysC+5TKgcprWjLNsAlJPNvnzB/nkRWd16w==",
+      "dependencies": [
+        "@opentelemetry/api",
+        "@sentry/core"
+      ]
+    },
+    "fzstd@0.1.1": {
+      "integrity": "sha512-dkuVSOKKwh3eas5VkJy1AW1vFpet8TA/fGmVA5krThl8YcOVE/8ZIoEA1+U1vEn5ckxxhLirSdY837azmbaNHA=="
+    },
+    "ws@8.18.3": {
+      "integrity": "sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg=="
+    },
+    "zod@4.1.12": {
+      "integrity": "sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ=="
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "npm:@discordeno/bot@21.0.0",
+      "npm:@discordeno/types@21",
+      "npm:@sentry/deno@^10.20.0",
+      "npm:zod@4.1.12"
+    ]
+  }
+}

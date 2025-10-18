@@ -6,5 +6,4 @@ public enum Protocol
     Udp = 1,
     Http = 2,
     WebSocket = 3,
-    RabbitMq = 4
 }

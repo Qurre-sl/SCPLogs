@@ -1,41 +1,70 @@
-using Qurre.API;
-using Qurre.API.Addons;
-using Qurre.API.Attributes;
+using System;
+using JetBrains.Annotations;
+using LabApi.Features;
+using LabApi.Features.Console;
+using LabApi.Loader.Features.Plugins;
 using SCPLogs.Configs;
 using SCPLogs.Sockets;
 
 namespace SCPLogs;
 
-[PluginInit("SCP Logs", "ZXC Team", "3.0.0")]
-public static class Main
+[PublicAPI]
+public class Main : Plugin<Global>
 {
-    internal static JsonConfig Config { get; } = new("SCPLogs");
-    internal static Global GlobalConfig { get; private set; } = new();
-    internal static LuaConfig LuaConfig { get; private set; } = new();
-    
+    public override string Name { get; } = "SCP Logs";
+    public override string Description { get; } = "Send game events to external services via sockets";
+    public override string Author { get; } = "ZXC Team";
+    public override Version Version { get; } = new(3, 0, 0);
+    public override Version RequiredApiVersion { get; } = new(LabApiProperties.CompiledVersion);
+    public override string ConfigFileName { get; set; } = "scplogs.yml";
+
+    internal static Main Instance { get; private set; } = null!;
+
     public static ISender? Sender { get; private set; }
-    
-    [PluginEnable]
-    internal static void Enable()
+
+    public override void LoadConfigs()
     {
-        GlobalConfig = Config.SafeGetValue("Global", new Global());
-        LuaConfig = Config.SafeGetValue("Lua", new LuaConfig());
-        
-        Events.Load();
-        
-        JsonConfig.UpdateFile();
+        Instance = this;
+        base.LoadConfigs();
 
-        LuaConfig.Load(LuaConfig);
-
-        switch (GlobalConfig.Protocol)
+        if (Config == null)
         {
-            case Protocol.Http:
-                Sender = new Sockets.Http.Client();
-                break;
-            
-            default:
-                Log.Warn($"Unknown protocol: {GlobalConfig.Protocol}");
-                break;
+            Logger.Error("Failed to load config, using defaults");
+            Config = new Global();
         }
+
+        LuaConfig.Load(Config.LuaConfig);
+    }
+
+    public override void Enable()
+    {
+        if (Config == null)
+        {
+            Logger.Error("Config is null, cannot enable plugin");
+            return;
+        }
+
+        Sender = Config.Protocol switch
+        {
+            Protocol.Http => new Sockets.Http.Client(),
+            Protocol.Tcp => new Sockets.Tcp.Client(),
+            Protocol.Udp => new Sockets.Udp.Client(),
+            Protocol.WebSocket => new Sockets.WebSocket.Client(),
+            _ => null
+        };
+
+        if (Sender == null)
+        {
+            Logger.Warn($"Unknown protocol: {Config.Protocol}");
+            return;
+        }
+
+        Events.Load();
+    }
+
+    public override void Disable()
+    {
+        Events.Unload();
+        Sender = null;
     }
 }

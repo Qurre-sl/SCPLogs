@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
-using MEC;
+using LabApi.Features.Console;
 using Newtonsoft.Json;
-using Qurre.API;
 using SCPLogs.Extensions;
 
 namespace SCPLogs.Sockets.Http;
@@ -16,20 +15,25 @@ public class Client : ISender
     private readonly Uri _host;
     private bool _alive;
     private readonly List<Message> _messages;
-    
+    private int _failedAttempts;
+    private const int MaxFailedAttempts = 5;
+    private const int ReconnectDelayMs = 5000;
+
     internal Client()
     {
         _httpClient = new HttpClient();
-        _httpClient.DefaultRequestHeaders.Authorization = new("Bearer", Main.GlobalConfig.ClientToken);
+        _httpClient.Timeout = TimeSpan.FromSeconds(10);
+        _httpClient.DefaultRequestHeaders.Authorization = new("Bearer", Main.Instance.Config?.ClientToken ?? "");
 
-        _host = new Uri($"http://{Main.GlobalConfig.Ip}:{Main.GlobalConfig.Port}/");
+        _host = new Uri($"http://{Main.Instance.Config?.Ip ?? "127.0.0.1"}:{Main.Instance.Config?.Port ?? 8080}/");
         _alive = true;
         _messages = [];
+        _failedAttempts = 0;
 
-        new Task(CollectMessages).Start();
-        new Task(GetCommands).Start();
-        new Task(UpdateOnline).Start();
-        new Task(HandShake).Start();
+        _ = Task.Run(CollectMessages);
+        _ = Task.Run(GetCommands);
+        _ = Task.Run(UpdateOnline);
+        _ = Task.Run(HandShake);
     }
     
     ~Client()
@@ -48,13 +52,13 @@ public class Client : ISender
             { "source", argument }
         });
 
-        new Task(() => {
-            HandleRequest(_httpClient.PostAsync(_host.AbsoluteUri + "Reply", content),
-                "sending the command response").Wait();
-        }).Start();
+        _ = Task.Run(async () => {
+            await HandleRequest(_httpClient.PostAsync(_host.AbsoluteUri + "Reply", content),
+                "sending the command response");
+        });
     }
 
-    private async void CollectMessages()
+    private async Task CollectMessages()
     {
         while (_alive)
         {
@@ -77,13 +81,13 @@ public class Client : ISender
             }
             catch (Exception ex)
             {
-                Log.Debug(ex);
+                Logger.Debug(ex);
             }
 
         }
     }
 
-    private async void GetCommands()
+    private async Task GetCommands()
     {
         while (_alive)
         {
@@ -108,12 +112,12 @@ public class Client : ISender
                 }
                 catch (Exception e)
                 {
-                    Log.Debug(e);
+                    Logger.Debug(e);
                 }
         }
     }
 
-    private async void UpdateOnline()
+    private async Task UpdateOnline()
     {
         while (_alive)
         {
@@ -129,7 +133,7 @@ public class Client : ISender
         }
     }
 
-    private async void HandShake()
+    private async Task HandShake()
     {
         while (_alive)
         {
@@ -140,26 +144,30 @@ public class Client : ISender
         }
     }
 
-    private static async Task HandleRequest(Task<HttpResponseMessage> task, string job = "unknown")
+    private async Task HandleRequest(Task<HttpResponseMessage> task, string job = "unknown")
     {
         try
         {
             HttpResponseMessage response = await task;
-        
+
             if (response.StatusCode == HttpStatusCode.OK)
+            {
+                _failedAttempts = 0;
                 return;
-        
+            }
+
             string responseString = await response.Content.ReadAsStringAsync();
-            Log.Error($"Caused error when {job}:\n{responseString}");
+            Logger.Error($"Caused error when {job}:\n{responseString}");
+            await HandleFailure();
         }
         catch (Exception ex)
         {
-            Log.Debug($"Caused error in {job}:\n{ex}");
-            await Task.Delay(30000);
+            Logger.Debug($"Caused error in {job}:\n{ex}");
+            await HandleFailure();
         }
     }
-    
-    private static async Task<string> HandleRequestAndGet(Task<HttpResponseMessage> task, string job = "unknown")
+
+    private async Task<string> HandleRequestAndGet(Task<HttpResponseMessage> task, string job = "unknown")
     {
         try
         {
@@ -167,16 +175,33 @@ public class Client : ISender
             string responseString = await response.Content.ReadAsStringAsync();
 
             if (response.StatusCode == HttpStatusCode.OK)
+            {
+                _failedAttempts = 0;
                 return responseString;
+            }
 
-            Log.Error($"Caused error when {job}:\n{responseString}");
+            Logger.Error($"Caused error when {job}:\n{responseString}");
+            await HandleFailure();
         }
         catch (Exception ex)
         {
-            Log.Debug($"Caused error in {job}:\n{ex}");
-            await Task.Delay(30000);
+            Logger.Debug($"Caused error in {job}:\n{ex}");
+            await HandleFailure();
         }
-        
+
         return string.Empty;
+    }
+
+    private async Task HandleFailure()
+    {
+        _failedAttempts++;
+
+        if (_failedAttempts >= MaxFailedAttempts)
+        {
+            Logger.Warn($"HTTP connection lost after {_failedAttempts} failed attempts. Reconnecting...");
+            _failedAttempts = 0;
+        }
+
+        await Task.Delay(ReconnectDelayMs);
     }
 }

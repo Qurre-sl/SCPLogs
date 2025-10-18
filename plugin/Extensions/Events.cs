@@ -1,7 +1,8 @@
 using System;
 using System.Text.RegularExpressions;
+using LabApi.Features.Console;
+using LabApi.Features.Wrappers;
 using PlayerRoles;
-using Qurre.API;
 
 namespace SCPLogs.Extensions;
 
@@ -18,13 +19,13 @@ internal static class EventsExtensions
     {
         if (Main.Sender is null)
         {
-            Log.Warn("Sender is null");
-            Log.Debug("Trying to send log: " + message);
+            Logger.Warn("Sender is null");
+            Logger.Debug("Trying to send log: " + message);
             return;
         }
 
         string time = string.Empty;
-        
+
         if (!message.Contains("<t:"))
             time = GetTime() + " ";
 
@@ -33,22 +34,24 @@ internal static class EventsExtensions
 
     internal static bool IsOneFraction(Player first, Player second)
     {
-        RoleTypeId roleType1 = first.RoleInformation.Role;
-        RoleTypeId roleType2 = second.RoleInformation.Role;
+        RoleTypeId roleType1 = first.Role;
+        RoleTypeId roleType2 = second.Role;
 
+        /* TODO: make it when will add in labapi
         if (roleType1 is RoleTypeId.Spectator or RoleTypeId.None)
-            roleType1 = first.RoleInformation.CachedRole;
+            roleType1 = first.PreviousRole;
 
         if (roleType2 is RoleTypeId.Spectator or RoleTypeId.None)
-            roleType2 = second.RoleInformation.CachedRole;
+            roleType2 = second.PreviousRole;
+        */
 
         return roleType1.GetFaction() == roleType2.GetFaction();
     }
 
     internal static string PrintPlayer(Player player, bool printRole = true)
     {
-        string nickname = BlockRegex.Replace(player.UserInformation.Nickname, "?");
-        string reply = $"`{nickname}` - {player.UserInformation.UserId}";
+        string nickname = BlockRegex.Replace(player.DisplayName, "?");
+        string reply = $"`{nickname}` - {player.UserId}";
 
         if (printRole)
             reply += $" ({GetRolePrint(player)})";
@@ -58,10 +61,10 @@ internal static class EventsExtensions
 
     internal static string GetRolePrint(Player player)
     {
-        RoleTypeId roleType = player.RoleInformation.Role;
+        RoleTypeId roleType = player.CurrentRole;
 
         if (roleType is RoleTypeId.Spectator or RoleTypeId.None)
-            roleType = player.RoleInformation.CachedRole;
+            roleType = player.PreviousRole;
 
         return $"{roleType}";
     }

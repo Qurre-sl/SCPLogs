@@ -1,12 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
-using MEC;
-using Newtonsoft.Json.Linq;
-using Qurre.API;
-using Qurre.Events.Structs;
-using SCPLogs.Configs;
+using LabApi.Features.Console;
+using LabApi.Loader.Features.Paths;
 using MoonSharp.Interpreter;
 using SCPLogs.Extensions;
 
@@ -14,117 +12,234 @@ namespace SCPLogs;
 
 internal static class Events
 {
+    private static readonly Dictionary<string, LuaEventConfig> EventConfigs = new();
+    private static readonly Dictionary<EventInfo, Delegate> RegisteredEvents = new();
+    private static DirectoryInfo? _configsDirectory;
+
     internal static void Load()
     {
-        Type iBaseType = typeof(IBaseEvent);
-        Assembly assembly = Assembly.GetAssembly(iBaseType);
-
-        JToken config = GetTranslations();
-
-        foreach (Type type in assembly.GetTypes())
-            ProcessType(type, iBaseType, config);
+        _configsDirectory = PathManager.Configs.CreateSubdirectory("SCPLogs");
+        LoadLuaConfigs();
+        RegisterAllEvents();
     }
 
-    private static void ProcessType(Type type, Type iBaseType, JToken config)
+    internal static void Unload()
     {
-        Lua.Internal.PreRegisterLuaType(type);
-
-        if (type.Namespace != iBaseType.Namespace || !ImplementsInterface(type, iBaseType))
-            return;
-
-        FieldInfo? fieldInfo = type.GetField("EventID", BindingFlags.NonPublic | BindingFlags.Static);
-
-        if (fieldInfo?.GetValue(null) is not uint eventId)
+        foreach (var (eventInfo, handler) in RegisteredEvents)
         {
-            Log.Error($"EventID in '{type.FullName}' not found");
+            try
+            {
+                eventInfo.RemoveEventHandler(null, handler);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Failed to unregister event {eventInfo.Name}: {ex.Message}");
+            }
+        }
+        RegisteredEvents.Clear();
+    }
+
+    private static void LoadLuaConfigs()
+    {
+        if (_configsDirectory == null || !_configsDirectory.Exists)
+        {
+            Logger.Warn($"Config directory does not exist: {_configsDirectory?.FullName}");
+            _configsDirectory?.Create();
             return;
         }
 
-        var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-        foreach (PropertyInfo property in properties)
-            Lua.Internal.RegisterLuaType(property.PropertyType);
-
-        Translate translation = Main.Config.SafeGetValue(type.Name, new Translate(
-            properties.Aggregate("Available arguments: ",
-                (current, property) => current + $"{{{property.Name}}} ({property.PropertyType}); ").Trim(),
-            string.Empty, []
-        ), source: config);
-
-        if (!translation.Enabled || string.IsNullOrEmpty(translation.LuaScript) || translation.Channels.Length == 0)
-            return;
-
-        bool checkAllowed = !Main.GlobalConfig.SendUnAllowedEvents.Contains(type.Name);
-
-        Dictionary<string, object> luaEnums = [];
-
-        foreach (PropertyInfo property in properties)
+        foreach (FileInfo file in _configsDirectory.GetFiles("*.lua"))
         {
-            Type typeOfProperty = property.PropertyType;
+            try
+            {
+                string eventName = Path.GetFileNameWithoutExtension(file.Name);
+                string luaScript = File.ReadAllText(file.FullName);
 
-            if (typeOfProperty is not { IsSealed: true, IsEnum: true })
-                continue;
+                var config = ParseLuaConfig(luaScript);
+                config.EventName = eventName;
+                config.LuaScript = luaScript;
 
-            if (typeOfProperty.Namespace?.StartsWith("Qurre.API.Objects") ?? true)
-                continue;
+                EventConfigs[eventName] = config;
+                Logger.Debug($"Loaded Lua config for event: {eventName}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Failed to load Lua config from {file.Name}: {ex.Message}");
+            }
+        }
+    }
 
-            luaEnums["Enum_" + typeOfProperty.Name] = UserData.CreateStatic(typeOfProperty);
+    private static LuaEventConfig ParseLuaConfig(string luaScript)
+    {
+        var config = new LuaEventConfig { Enabled = true, Channels = [] };
+
+        var lines = luaScript.Split('\n');
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (!trimmed.StartsWith("--")) break;
+
+            if (trimmed.Contains("@enabled"))
+                config.Enabled = trimmed.Contains("true", StringComparison.OrdinalIgnoreCase);
+            else if (trimmed.Contains("@channels"))
+            {
+                var channelsStr = trimmed.Substring(trimmed.IndexOf("@channels") + 9).Trim();
+                config.Channels = channelsStr.Split(',').Select(c => c.Trim()).Where(c => !string.IsNullOrEmpty(c)).ToArray();
+            }
         }
 
-        PropertyInfo? propertyAllowed = type.GetProperty("Allowed", BindingFlags.Public | BindingFlags.Instance);
-        var sendLog = (string message, string[]? channels = null) =>
-            EventsExtensions.SendLog(message, channels ?? translation.Channels);
+        return config;
+    }
 
-        Core.InjectAction(eventId, int.MinValue, @event => { Timing.RunCoroutine(CallEvent(@event)); });
+    private static void RegisterAllEvents()
+    {
+        Assembly? labApiAssembly = AppDomain.CurrentDomain.GetAssemblies()
+            .FirstOrDefault(a => a.GetName().Name == "LabApi");
 
-        return;
-
-        IEnumerator<float> CallEvent(IBaseEvent @event)
+        if (labApiAssembly == null)
         {
-            if (checkAllowed && propertyAllowed?.GetValue(@event) is false)
-                yield break;
+            Logger.Error("LabApi assembly not found");
+            return;
+        }
 
+        var eventHandlerTypes = labApiAssembly.GetTypes()
+            .Where(t => t.Namespace != null && t.Namespace == "LabApi.Events.Handlers" && t.IsClass && t.IsAbstract && t.IsSealed);
+
+        foreach (var eventHandlerType in eventHandlerTypes)
+        {
+            var events = eventHandlerType.GetEvents(BindingFlags.Public | BindingFlags.Static);
+            string classPrefix = eventHandlerType.Name;
+
+            foreach (var eventInfo in events)
+            {
+                if (eventInfo.EventHandlerType == null)
+                    continue;
+
+                if (!eventInfo.EventHandlerType.Name.StartsWith("LabEventHandler"))
+                    continue;
+
+                string eventName = $"{classPrefix}.{eventInfo.Name}";
+
+                RegisterEvent(eventInfo, eventName);
+            }
+        }
+    }
+
+    private static void RegisterEvent(EventInfo eventInfo, string eventName)
+    {
+        if (!EventConfigs.TryGetValue(eventName, out var config) || !config.Enabled || config.Channels.Length == 0)
+            return;
+
+        try
+        {
+            Type? eventHandlerType = eventInfo.EventHandlerType;
+            MethodInfo? invokeMethod = eventHandlerType?.GetMethod("Invoke");
+
+            if (invokeMethod == null)
+                return;
+
+            ParameterInfo[] parameters = invokeMethod.GetParameters();
+
+            Delegate? handler = parameters.Length switch
+            {
+                0 => new Action(() => ExecuteLuaEvent(eventName, config, new { })),
+                1 => CreateTypedHandler(parameters[0].ParameterType, eventName, config),
+                _ => null
+            };
+
+            if (handler == null)
+                return;
+
+            eventInfo.AddEventHandler(null, handler);
+            RegisteredEvents[eventInfo] = handler;
+
+            Logger.Debug($"Registered event: {eventName}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Failed to register event {eventName}: {ex.Message}");
+        }
+    }
+
+    private static Delegate? CreateTypedHandler(Type argsType, string eventName, LuaEventConfig config)
+    {
+        Type actionType = typeof(Action<>).MakeGenericType(argsType);
+
+        MethodInfo? method = typeof(Events).GetMethod(nameof(ExecuteLuaEventGeneric), BindingFlags.NonPublic | BindingFlags.Static);
+
+        if (method == null)
+            return null;
+        
+        MethodInfo genericMethod = method.MakeGenericMethod(argsType);
+
+        object[] args = [eventName, config];
+        Delegate handler = Delegate.CreateDelegate(actionType, args, genericMethod);
+
+        return handler;
+    }
+
+    private static void ExecuteLuaEventGeneric<T>(string eventName, LuaEventConfig config, T eventArgs)
+    {
+        ExecuteLuaEvent(eventName, config, eventArgs);
+    }
+
+    private static void ExecuteLuaEvent(string eventName, LuaEventConfig config, object eventArgs)
+    {
+        try
+        {
             Script luaScript = new();
             Lua.Internal.PrepareTable(luaScript.Globals);
 
-            foreach (PropertyInfo property in properties)
-                luaScript.Globals[property.Name] = property.GetValue(@event);
+            Type argsType = eventArgs.GetType();
 
-            foreach (var luaEnum in luaEnums)
-                luaScript.Globals[luaEnum.Key] = luaEnum.Value;
+            Lua.Internal.PreRegisterLuaType(argsType);
+
+            var properties = argsType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+            foreach (PropertyInfo property in properties)
+            {
+                try
+                {
+                    Lua.Internal.RegisterLuaType(property.PropertyType);
+                    luaScript.Globals[property.Name] = property.GetValue(eventArgs);
+
+                    if (property.PropertyType is { IsSealed: true, IsEnum: true })
+                        luaScript.Globals["Enum_" + property.PropertyType.Name] = UserData.CreateStatic(property.PropertyType);
+                }
+                catch
+                {
+                    // Skip
+                }
+            }
+
+            var sendLog = (string message, string[]? channels = null) =>
+                EventsExtensions.SendLog(message, channels ?? config.Channels);
 
             luaScript.Globals["SendLog"] = sendLog;
             luaScript.Globals["PrintTime"] = (object)EventsExtensions.GetTime;
             luaScript.Globals["PrintPlayer"] = (object)EventsExtensions.PrintPlayer;
             luaScript.Globals["IsOneFraction"] = (object)EventsExtensions.IsOneFraction;
 
-            luaScript.DoString(translation.LuaScript);
+            luaScript.DoString(config.LuaScript);
             DynValue reply = luaScript.Globals.Get("reply");
 
-            if (reply.IsNil())
-                yield break;
-
-            sendLog(reply.Type == DataType.String ? reply.String : reply.ToString());
-            Log.Debug(type.Name);
-
+            if (!reply.IsNil())
+            {
+                string message = reply.Type == DataType.String ? reply.String : reply.ToString();
+                sendLog(message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Error executing Lua script for {eventName}: {ex.Message}");
         }
     }
 
-    private static bool ImplementsInterface(Type type, Type interfaceType)
+    private class LuaEventConfig
     {
-        return type != interfaceType && interfaceType.IsInterface && interfaceType.IsAssignableFrom(type);
-    }
-
-    private static JToken GetTranslations()
-    {
-        JToken? par = Main.Config.JsonArray["Translations"];
-
-        if (par is not null)
-            return par;
-
-        par = JObject.Parse("{ }");
-        Main.Config.JsonArray["Translations"] = par;
-
-        return par;
+        public string EventName { get; set; } = string.Empty;
+        public string LuaScript { get; set; } = string.Empty;
+        public string[] Channels { get; set; } = [];
+        public bool Enabled { get; set; }
     }
 }
